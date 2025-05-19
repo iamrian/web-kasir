@@ -1,40 +1,35 @@
 const express = require('express');
 const path = require('path');
-const session = require('express-session');  // <-- tambah ini
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const db = require('./db'); // koneksi dan fungsi DB ada di db.js
 
 const app = express();
 const port = 3000;
 
-// Middleware supaya bisa akses file statis (CSS, gambar) di folder 'public'
+// Middleware akses file statis
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Middleware untuk parsing form data (application/x-www-form-urlencoded)
+// Middleware parsing form data
 app.use(express.urlencoded({ extended: true }));
 
 // Setup session
 app.use(session({
-  secret: 'secret_key_rahasia',  // ganti dengan secret yang kuat
+  secret: 'secret_kamu_123',  // ganti dengan secret yg aman
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 }  // session bertahan 1 jam
 }));
 
-// Dummy data user untuk contoh login
-const users = [
-  { username: 'admin', password: 'admin123' },
-  { username: 'user', password: 'user123' },
-];
-
-// Middleware untuk cek session login
+// Middleware cek session login
 function isLoggedIn(req, res, next) {
-  if (req.session.user) {
-    next(); // lanjut ke route berikutnya
+  if (req.session.userId) {
+    next();
   } else {
     res.redirect('/login');
   }
 }
 
-// Route utama (home)
+// Route Home
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -46,15 +41,21 @@ app.get('/', (req, res) => {
     <body>
       <div class="container">
         <h1>Selamat datang di Web Kasir</h1>
-        <a class="btn" href="/login">Login</a>
+        ${req.session.userId ? `
+          <a class="btn" href="/dashboard">Dashboard</a>
+          <a class="btn" href="/logout">Logout</a>
+        ` : `
+          <a class="btn" href="/login">Login</a>
+        `}
       </div>
     </body>
     </html>
   `);
 });
 
-// Route login GET
+// Route Login GET
 app.get('/login', (req, res) => {
+  if (req.session.userId) return res.redirect('/dashboard');
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -76,48 +77,93 @@ app.get('/login', (req, res) => {
   `);
 });
 
-// Route login POST (proses login)
-app.post('/login', (req, res) => {
+// Route Login POST
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  
-  const user = users.find(u => u.username === username && u.password === password);
-  
-  if (user) {
-    // Simpan data user di session
-    req.session.user = { username: user.username };
-
-    // Redirect ke dashboard
-    res.redirect('/dashboard');
-  } else {
-    res.send(`
-      <p>Login gagal! Username atau password salah.</p>
-      <a href="/login">Kembali ke login</a>
-    `);
+  try {
+    const user = await db.getUserByUsername(username);
+    if (!user) {
+      return res.send(`
+        <p>Login gagal! Username atau password salah.</p>
+        <a href="/login">Kembali ke login</a>
+      `);
+    }
+    const match = await bcrypt.compare(password, user.password);
+    if (match) {
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      res.redirect('/dashboard');
+    } else {
+      res.send(`
+        <p>Login gagal! Username atau password salah.</p>
+        <a href="/login">Kembali ke login</a>
+      `);
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
   }
 });
 
-// Route dashboard (hanya bisa diakses jika sudah login)
+// Route Logout
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.redirect('/');
+  });
+});
+
+// Dashboard (protected)
 app.get('/dashboard', isLoggedIn, (req, res) => {
   res.send(`
     <h1>Dashboard Web Kasir</h1>
-    <p>Selamat datang, ${req.session.user.username}! Anda sudah login.</p>
-    <a href="/logout">Logout</a><br/>
-    <a href="/">Kembali ke halaman utama</a>
+    <p>Selamat datang, ${req.session.username}!</p>
+    <a href="/products">Data Barang</a><br/>
+    <a href="/transactions">Transaksi</a><br/>
+    <a href="/logout">Logout</a>
   `);
 });
 
-// Route logout untuk menghapus session dan logout user
-app.get('/logout', (req, res) => {
-  req.session.destroy(err => {
-    if (err) {
-      return res.status(500).send('Gagal logout');
-    }
-    res.clearCookie('connect.sid');
-    res.send(`
-      <p>Kamu sudah logout.</p>
-      <a href="/">Kembali ke halaman utama</a>
-    `);
-  });
+// Route Data Barang (protected)
+app.get('/products', isLoggedIn, async (req, res) => {
+  const products = await db.getAllProducts();
+  let list = products.map(p => `<li>${p.name} - Harga: Rp${p.price} - Stok: ${p.stock}</li>`).join('');
+  res.send(`
+    <h1>Data Barang</h1>
+    <ul>${list}</ul>
+    <a href="/dashboard">Kembali ke dashboard</a>
+  `);
+});
+
+// Route Tambah Barang GET (form)
+app.get('/products/add', isLoggedIn, (req, res) => {
+  res.send(`
+    <h1>Tambah Barang</h1>
+    <form method="POST" action="/products/add">
+      <input type="text" name="name" placeholder="Nama Barang" required /><br/>
+      <input type="number" name="price" placeholder="Harga" required /><br/>
+      <input type="number" name="stock" placeholder="Stok" required /><br/>
+      <button type="submit">Tambah</button>
+    </form>
+    <a href="/products">Kembali ke data barang</a>
+  `);
+});
+
+// Route Tambah Barang POST
+app.post('/products/add', isLoggedIn, async (req, res) => {
+  const { name, price, stock } = req.body;
+  await db.addProduct(name, price, stock);
+  res.redirect('/products');
+});
+
+// Route Transaksi GET (list transaksi)
+app.get('/transactions', isLoggedIn, async (req, res) => {
+  const transactions = await db.getAllTransactions();
+  let list = transactions.map(t => `<li>ID: ${t.id}, Barang: ${t.product_name}, Jumlah: ${t.quantity}, Total: Rp${t.total_price}, Tanggal: ${t.date}</li>`).join('');
+  res.send(`
+    <h1>Data Transaksi</h1>
+    <ul>${list}</ul>
+    <a href="/dashboard">Kembali ke dashboard</a>
+  `);
 });
 
 // Jalankan server
