@@ -70,3 +70,34 @@ select:focus {
   border-color: var(--color-dark);
   box-shadow: 0 0 0 0.2rem rgba(83,125,93,0.25);
 }
+/* Tambahan untuk badge stok agar lebih menarik */
+.badge-stok {
+  display: inline-block;
+  padding: 0.25em 0.6em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-on-dark);
+  background-color: var(--color-dark);
+  border-radius: 0.5rem;
+}
+
+/* Tambahan hover pada baris tabel agar lebih interaktif */
+table.table tbody tr:hover {
+  background-color: var(--color-light);
+  cursor: pointer;
+}
+
+/* Responsif untuk form agar lebih rapi di layar kecil */
+@media (max-width: 576px) {
+  form#formBarang, form#formTransaksi {
+    flex-direction: column;
+  }
+  form#formBarang .col-auto,
+  form#formTransaksi .col-auto {
+    width: 100%;
+  }
+  form#formBarang button,
+  form#formTransaksi button {
+    width: 100%;
+  }
+}

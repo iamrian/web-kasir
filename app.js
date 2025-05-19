@@ -1,14 +1,13 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const sqlite3 = require('sqlite3').verbose();
-const bcrypt = require('bcrypt');
-
+const authRouter = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Setup middleware
+// Middleware
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: 'rahasia-kasir',
@@ -16,21 +15,33 @@ app.use(session({
   saveUninitialized: false,
 }));
 
-// Inisialisasi database
-const db = new sqlite3.Database('./database/kasir.db');
-
-// Import route
+// Import routes
 const authRouter = require('./routes/auth');
+const barangRouter = require('./routes/barang');
+const transaksiRouter = require('./routes/transaksi');
 
-// ✅ Explicit route untuk halaman landing
+// Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ✅ Route auth untuk login/register/dashboard/logout
+// Routes untuk autentikasi
 app.use('/', authRouter);
 
-// Jalankan server
+// ...
+app.use('/', authRouter);
+
+// Routes untuk data barang (products)
+app.use('/products', barangRouter);
+
+// Routes untuk transaksi
+app.use('/transactions', transaksiRouter);
+
+// 404 handler (optional)
+app.use((req, res) => {
+  res.status(404).send('404 Not Found');
+});
+
 app.listen(PORT, () => {
   console.log(`Server berjalan di http://localhost:${PORT}`);
 });

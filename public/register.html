@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Register - Mutiara Kasir</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="/" class="navbar-brand">Mutiara Kasir</a>
+      <ul class="nav-menu" style="list-style:none; display:flex; gap:1rem; padding-left:0;">
+        <li><a href="/login" class="nav-link">Login</a></li>
+        <li><a href="/register" class="nav-link" style="font-weight:bold;">Register</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container" style="max-width:400px; margin: 2rem auto; padding: 1rem;">
+    <div class="card" style="padding: 2rem;">
+      <h2 style="margin-bottom:1rem;">Register</h2>
+      <form action="/register" method="POST" style="display:flex; flex-direction:column; gap:1rem;">
+        <input
+          name="username"
+          type="text"
+          placeholder="Username"
+          required
+          style="padding:0.5rem; font-size:1rem;"
+        />
+        <input
+          name="password"
+          type="password"
+          placeholder="Password"
+          required
+          style="padding:0.5rem; font-size:1rem;"
+        />
+        <button type="submit" class="btn-primary" style="padding:0.5rem; font-size:1rem;">
+          Register
+        </button>
+      </form>
+      <p style="margin-top:1rem; text-align:center;">
+        Sudah punya akun? <a href="/login">Login</a>
+      </p>
+    </div>
+  </main>
+</body>
+</html>
