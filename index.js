@@ -1,5 +1,7 @@
 const express = require('express');
 const path = require('path');
+const session = require('express-session');  // <-- tambah ini
+
 const app = express();
 const port = 3000;
 
@@ -9,11 +11,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Middleware untuk parsing form data (application/x-www-form-urlencoded)
 app.use(express.urlencoded({ extended: true }));
 
+// Setup session
+app.use(session({
+  secret: 'secret_key_rahasia',  // ganti dengan secret yang kuat
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 1000 * 60 * 60 }  // session bertahan 1 jam
+}));
+
 // Dummy data user untuk contoh login
 const users = [
   { username: 'admin', password: 'admin123' },
   { username: 'user', password: 'user123' },
 ];
+
+// Middleware untuk cek session login
+function isLoggedIn(req, res, next) {
+  if (req.session.user) {
+    next(); // lanjut ke route berikutnya
+  } else {
+    res.redirect('/login');
+  }
+}
 
 // Route utama (home)
 app.get('/', (req, res) => {
@@ -64,10 +83,12 @@ app.post('/login', (req, res) => {
   const user = users.find(u => u.username === username && u.password === password);
   
   if (user) {
-    // Kalau login sukses, redirect ke dashboard
+    // Simpan data user di session
+    req.session.user = { username: user.username };
+
+    // Redirect ke dashboard
     res.redirect('/dashboard');
   } else {
-    // Kalau gagal login, kasih pesan error sederhana
     res.send(`
       <p>Login gagal! Username atau password salah.</p>
       <a href="/login">Kembali ke login</a>
@@ -75,13 +96,28 @@ app.post('/login', (req, res) => {
   }
 });
 
-// Route dashboard (halaman setelah login sukses)
-app.get('/dashboard', (req, res) => {
+// Route dashboard (hanya bisa diakses jika sudah login)
+app.get('/dashboard', isLoggedIn, (req, res) => {
   res.send(`
     <h1>Dashboard Web Kasir</h1>
-    <p>Selamat datang, Anda sudah login!</p>
+    <p>Selamat datang, ${req.session.user.username}! Anda sudah login.</p>
+    <a href="/logout">Logout</a><br/>
     <a href="/">Kembali ke halaman utama</a>
   `);
+});
+
+// Route logout untuk menghapus session dan logout user
+app.get('/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      return res.status(500).send('Gagal logout');
+    }
+    res.clearCookie('connect.sid');
+    res.send(`
+      <p>Kamu sudah logout.</p>
+      <a href="/">Kembali ke halaman utama</a>
+    `);
+  });
 });
 
 // Jalankan server
