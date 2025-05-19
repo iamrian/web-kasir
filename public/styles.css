@@ -1,0 +1,72 @@
+/* Palette Variables */
+:root {
+  --color-dark: #537D5D;
+  --color-medium: #73946B;
+  --color-light: #9EBC8A;
+  --color-lighter: #D2D0A0;
+  --text-on-dark: #FFFFFF;
+}
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background-color: var(--color-lighter);
+  color: var(--color-dark);
+}
+
+/* Navbar */
+.navbar {
+  background-color: var(--color-light) !important;
+}
+.navbar-brand,
+.nav-link {
+  color: var(--color-dark) !important;
+}
+.nav-link:hover {
+  color: var(--color-medium) !important;
+}
+
+/* Hero Header */
+header {
+  background: linear-gradient(45deg, var(--color-dark), var(--color-medium));
+  color: var(--text-on-dark);
+}
+
+/* Cards */
+.card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  background-color: var(--color-lighter);
+  border: 1px solid var(--color-medium);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--color-medium);
+  border: 1px solid var(--color-dark);
+  color: var(--text-on-dark);
+}
+.btn-primary:hover {
+  background-color: var(--color-dark);
+}
+
+/* Links */
+a {
+  color: var(--color-dark);
+}
+a:hover {
+  color: var(--color-medium);
+}
+
+/* Inputs & Selects (for forms later) */
+input,
+select,
+button {
+  border-radius: 4px;
+  border: 1px solid var(--color-medium);
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-dark);
+  box-shadow: 0 0 0 0.2rem rgba(83,125,93,0.25);
+}

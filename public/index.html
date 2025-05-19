@@ -1,11 +1,79 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <title>Web Kasir</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mutiara Kasir</title>
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+  <!-- Custom Palette CSS -->
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <h1>Selamat datang di Web Kasir</h1>
-  <a href="/login">Login</a>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg">
+    <div class="container">
+      <a class="navbar-brand" href="/">Mutiara Kasir</a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="/login">Login</a></li>
+          <li class="nav-item"><a class="nav-link" href="/register">Register</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Header -->
+  <header class="py-5 text-center">
+    <div class="container">
+      <h1 class="display-4">Selamat datang di Mutiara Kasir</h1>
+      <p class="lead">Kelola data barang dan transaksi dengan mudah</p>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container my-5">
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">Data Barang</h5>
+            <p class="card-text flex-grow-1">Lihat dan kelola stok barang Anda.</p>
+            <a href="/products" class="btn btn-primary mt-auto">Masuk</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">Transaksi</h5>
+            <p class="card-text flex-grow-1">Catat penjualan dan lihat laporan transaksi.</p>
+            <a href="/transactions" class="btn btn-primary mt-auto">Masuk</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="text-center py-4">
+    &copy; 2025 Mutiara Kasir
+  </footer>
+
+  <!-- Bootstrap JS Bundle -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+  ></script>
 </body>
 </html>

@@ -142,7 +142,8 @@ app.get('/dashboard', isLoggedIn, (req, res) => {
     <p>Selamat datang, ${req.session.username}!</p>
     <ul>
       <li><a href="/products">Data Barang</a></li>
-      <li><a href="/transactions">Transaksi</a></li>
+      <li><a href="/transactions">Laporan Transaksi</a></li>
+      <li><a href="/transactions/new">Jual Barang</a></li>
       <li><a href="/logout">Logout</a></li>
     </ul>
   `);
@@ -185,19 +186,19 @@ app.post('/products/add', isLoggedIn, (req, res) => {
   );
 });
 
-// Transactions
+// Transactions list
 app.get('/transactions', isLoggedIn, (req, res) => {
   req.db.all(
     `SELECT t.id, p.name AS product, t.quantity, t.total_price, t.date
-     FROM transactions t 
+     FROM transactions t
      JOIN products p ON t.product_id = p.id`,
     [],
     (err, rows) => {
       const list = rows.map(t =>
-        `<li>#${t.id} ${t.product} ×${t.quantity} = Rp${t.total_price} (${t.date})</li>`
+        `<li>#${t.id} ${t.product} ×${t.quantity} = Rp${t.total_price} pada ${t.date}</li>`
       ).join('');
       res.send(`
-        <h2>Data Transaksi</h2>
+        <h2>Laporan Transaksi</h2>
         <ul>${list}</ul>
         <a href="/dashboard">Kembali</a>
       `);
@@ -205,6 +206,48 @@ app.get('/transactions', isLoggedIn, (req, res) => {
   );
 });
 
+// New Transaction (sell)
+app.get('/transactions/new', isLoggedIn, (req, res) => {
+  req.db.all(`SELECT * FROM products WHERE stock > 0`, [], (err, products) => {
+    const options = products.map(p =>
+      `<option value="${p.id}">${p.name} (Rp${p.price}, Stok: ${p.stock})</option>`
+    ).join('');
+    res.send(`
+      <h2>Jual Barang</h2>
+      <form method="POST" action="/transactions/new">
+        <select name="product_id">${options}</select><br/>
+        <input name="quantity" type="number" placeholder="Jumlah" min="1" required/><br/>
+        <button>Jual</button>
+      </form>
+      <a href="/dashboard">Batal</a>
+    `);
+  });
+});
+
+app.post('/transactions/new', isLoggedIn, (req, res) => {
+  const { product_id, quantity } = req.body;
+  const qty = parseInt(quantity, 10);
+  req.db.get(`SELECT * FROM products WHERE id = ?`, [product_id], (err, product) => {
+    if (!product || product.stock < qty) {
+      return res.send('Stok tidak mencukupi. <a href="/transactions/new">Coba lagi</a>');
+    }
+    const total = product.price * qty;
+    const now = new Date().toISOString();
+    req.db.run(
+      `INSERT INTO transactions(product_id,quantity,total_price,date) VALUES(?,?,?,?)`,
+      [product_id, qty, total, now],
+      function() {
+        req.db.run(
+          `UPDATE products SET stock = stock - ? WHERE id = ?`,
+          [qty, product_id],
+          () => res.redirect('/transactions')
+        );
+      }
+    );
+  });
+});
+
+// Start server
 app.listen(PORT, () => {
   console.log(`Server berjalan di http://localhost:${PORT}`);
 });
