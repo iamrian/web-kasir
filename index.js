@@ -2,171 +2,209 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
-const db = require('./db'); // koneksi dan fungsi DB ada di db.js
+const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
-const port = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Middleware akses file statis
-app.use(express.static(path.join(__dirname, 'public')));
+// --- Setup Database ---
+const db = new sqlite3.Database('./database/kasir.db');
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    price REAL,
+    stock INTEGER
+  )`);
+  db.run(`CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    quantity INTEGER,
+    total_price REAL,
+    date TEXT,
+    FOREIGN KEY(product_id) REFERENCES products(id)
+  )`);
+});
 
-// Middleware parsing form data
+// --- Middlewares ---
 app.use(express.urlencoded({ extended: true }));
-
-// Setup session
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
-  secret: 'secret_kamu_123',  // ganti dengan secret yg aman
+  secret: 'rahasia-kasir-!@#',
   resave: false,
   saveUninitialized: false,
 }));
 
-// Middleware cek session login
+// inject db into req
+app.use((req, res, next) => {
+  req.db = db;
+  next();
+});
+
+// auth check
 function isLoggedIn(req, res, next) {
-  if (req.session.userId) {
-    next();
-  } else {
-    res.redirect('/login');
-  }
+  if (req.session.userId) return next();
+  res.redirect('/login');
 }
 
-// Route Home
+// --- Routes ---
+
+// Home
 app.get('/', (req, res) => {
   res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Web Kasir</title>
-      <link rel="stylesheet" href="/styles.css" />
-    </head>
-    <body>
-      <div class="container">
-        <h1>Selamat datang di Web Kasir</h1>
-        ${req.session.userId ? `
-          <a class="btn" href="/dashboard">Dashboard</a>
-          <a class="btn" href="/logout">Logout</a>
-        ` : `
-          <a class="btn" href="/login">Login</a>
-        `}
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-// Route Login GET
-app.get('/login', (req, res) => {
-  if (req.session.userId) return res.redirect('/dashboard');
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Login - Web Kasir</title>
-      <link rel="stylesheet" href="/styles.css" />
-    </head>
-    <body>
-      <div class="container">
-        <h2>Login</h2>
-        <form method="POST" action="/login">
-          <input type="text" name="username" placeholder="Username" required /><br/>
-          <input type="password" name="password" placeholder="Password" required /><br/>
-          <button type="submit">Login</button>
-        </form>
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-// Route Login POST
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const user = await db.getUserByUsername(username);
-    if (!user) {
-      return res.send(`
-        <p>Login gagal! Username atau password salah.</p>
-        <a href="/login">Kembali ke login</a>
-      `);
+    <h1>Web Kasir</h1>
+    ${req.session.userId
+      ? `<p>Halo, ${req.session.username}!</p>
+         <a href="/dashboard">Dashboard</a> | <a href="/logout">Logout</a>`
+      : `<a href="/login">Login</a> | <a href="/register">Register</a>`
     }
-    const match = await bcrypt.compare(password, user.password);
-    if (match) {
+  `);
+});
+
+// Register
+app.get('/register', (req, res) => {
+  res.send(`
+    <h2>Register</h2>
+    <form method="POST" action="/register">
+      <input name="username" placeholder="Username" required/><br/>
+      <input name="password" type="password" placeholder="Password" required/><br/>
+      <button>Daftar</button>
+    </form>
+    <p>Sudah punya akun? <a href="/login">Login</a></p>
+  `);
+});
+
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  const hash = await bcrypt.hash(password, 10);
+  req.db.run(
+    `INSERT INTO users(username,password) VALUES(?,?)`,
+    [username, hash],
+    err => {
+      if (err) {
+        if (err.code === 'SQLITE_CONSTRAINT') {
+          return res.send('Username sudah terpakai. <a href="/register">Coba lagi</a>');
+        }
+        return res.send('Error saat registrasi.');
+      }
+      res.redirect('/login');
+    }
+  );
+});
+
+// Login
+app.get('/login', (req, res) => {
+  res.send(`
+    <h2>Login</h2>
+    <form method="POST" action="/login">
+      <input name="username" placeholder="Username" required/><br/>
+      <input name="password" type="password" placeholder="Password" required/><br/>
+      <button>Login</button>
+    </form>
+    <p>Belum punya akun? <a href="/register">Daftar</a></p>
+  `);
+});
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  req.db.get(
+    `SELECT * FROM users WHERE username = ?`,
+    [username],
+    async (err, user) => {
+      if (err || !user) {
+        return res.send('Login gagal. <a href="/login">Coba lagi</a>');
+      }
+      const ok = await bcrypt.compare(password, user.password);
+      if (!ok) {
+        return res.send('Login gagal. <a href="/login">Coba lagi</a>');
+      }
       req.session.userId = user.id;
       req.session.username = user.username;
       res.redirect('/dashboard');
-    } else {
-      res.send(`
-        <p>Login gagal! Username atau password salah.</p>
-        <a href="/login">Kembali ke login</a>
-      `);
     }
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
-  }
+  );
 });
 
-// Route Logout
+// Logout
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/');
+  req.session.destroy(() => res.redirect('/login'));
+});
+
+// Dashboard
+app.get('/dashboard', isLoggedIn, (req, res) => {
+  res.send(`
+    <h1>Dashboard</h1>
+    <p>Selamat datang, ${req.session.username}!</p>
+    <ul>
+      <li><a href="/products">Data Barang</a></li>
+      <li><a href="/transactions">Transaksi</a></li>
+      <li><a href="/logout">Logout</a></li>
+    </ul>
+  `);
+});
+
+// Products
+app.get('/products', isLoggedIn, (req, res) => {
+  req.db.all(`SELECT * FROM products`, [], (err, rows) => {
+    const list = rows.map(p =>
+      `<li>${p.name} | Rp${p.price} | Stok: ${p.stock}</li>`
+    ).join('');
+    res.send(`
+      <h2>Data Barang</h2>
+      <ul>${list}</ul>
+      <a href="/products/add">Tambah Barang</a><br/>
+      <a href="/dashboard">Kembali</a>
+    `);
   });
 });
 
-// Dashboard (protected)
-app.get('/dashboard', isLoggedIn, (req, res) => {
-  res.send(`
-    <h1>Dashboard Web Kasir</h1>
-    <p>Selamat datang, ${req.session.username}!</p>
-    <a href="/products">Data Barang</a><br/>
-    <a href="/transactions">Transaksi</a><br/>
-    <a href="/logout">Logout</a>
-  `);
-});
-
-// Route Data Barang (protected)
-app.get('/products', isLoggedIn, async (req, res) => {
-  const products = await db.getAllProducts();
-  let list = products.map(p => `<li>${p.name} - Harga: Rp${p.price} - Stok: ${p.stock}</li>`).join('');
-  res.send(`
-    <h1>Data Barang</h1>
-    <ul>${list}</ul>
-    <a href="/dashboard">Kembali ke dashboard</a>
-  `);
-});
-
-// Route Tambah Barang GET (form)
 app.get('/products/add', isLoggedIn, (req, res) => {
   res.send(`
-    <h1>Tambah Barang</h1>
+    <h2>Tambah Barang</h2>
     <form method="POST" action="/products/add">
-      <input type="text" name="name" placeholder="Nama Barang" required /><br/>
-      <input type="number" name="price" placeholder="Harga" required /><br/>
-      <input type="number" name="stock" placeholder="Stok" required /><br/>
-      <button type="submit">Tambah</button>
+      <input name="name" placeholder="Nama" required/><br/>
+      <input name="price" type="number" placeholder="Harga" required/><br/>
+      <input name="stock" type="number" placeholder="Stok" required/><br/>
+      <button>Tambah</button>
     </form>
-    <a href="/products">Kembali ke data barang</a>
+    <a href="/products">Batal</a>
   `);
 });
 
-// Route Tambah Barang POST
-app.post('/products/add', isLoggedIn, async (req, res) => {
+app.post('/products/add', isLoggedIn, (req, res) => {
   const { name, price, stock } = req.body;
-  await db.addProduct(name, price, stock);
-  res.redirect('/products');
+  req.db.run(
+    `INSERT INTO products(name,price,stock) VALUES(?,?,?)`,
+    [name, price, stock],
+    () => res.redirect('/products')
+  );
 });
 
-// Route Transaksi GET (list transaksi)
-app.get('/transactions', isLoggedIn, async (req, res) => {
-  const transactions = await db.getAllTransactions();
-  let list = transactions.map(t => `<li>ID: ${t.id}, Barang: ${t.product_name}, Jumlah: ${t.quantity}, Total: Rp${t.total_price}, Tanggal: ${t.date}</li>`).join('');
-  res.send(`
-    <h1>Data Transaksi</h1>
-    <ul>${list}</ul>
-    <a href="/dashboard">Kembali ke dashboard</a>
-  `);
+// Transactions
+app.get('/transactions', isLoggedIn, (req, res) => {
+  req.db.all(
+    `SELECT t.id, p.name AS product, t.quantity, t.total_price, t.date
+     FROM transactions t 
+     JOIN products p ON t.product_id = p.id`,
+    [],
+    (err, rows) => {
+      const list = rows.map(t =>
+        `<li>#${t.id} ${t.product} ×${t.quantity} = Rp${t.total_price} (${t.date})</li>`
+      ).join('');
+      res.send(`
+        <h2>Data Transaksi</h2>
+        <ul>${list}</ul>
+        <a href="/dashboard">Kembali</a>
+      `);
+    }
+  );
 });
 
-// Jalankan server
-app.listen(port, () => {
-  console.log(`Server berjalan di http://localhost:${port}`);
+app.listen(PORT, () => {
+  console.log(`Server berjalan di http://localhost:${PORT}`);
 });
