@@ -1,39 +1,54 @@
-
 const express = require('express');
-const session = require('express-session');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = 3000;
 
-// Database
-const db = new sqlite3.Database('./database/kasir.db');
+// Middleware supaya bisa akses file statis (CSS, gambar) di folder 'public'
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Middleware
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
-app.use(session({
-    secret: 'rahasia-kasir',
-    resave: false,
-    saveUninitialized: true,
-}));
-
-// Routes
-app.use('/', require('./routes/auth'));
-app.use('/barang', require('./routes/barang'));
-app.use('/transaksi', require('./routes/transaksi'));
-
-// Buat tabel jika belum ada
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS barang (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nama TEXT,
-    harga INTEGER,
-    stok INTEGER
-  )`);
+// Route utama (home)
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Web Kasir</title>
+      <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+      <div class="container">
+        <h1>Selamat datang di Web Kasir</h1>
+        <a class="btn" href="/login">Login</a>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
-// Listen
-app.listen(PORT, () => {
-    console.log(`Server berjalan di http://localhost:${PORT}`);
+// Route login
+app.get('/login', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Login - Web Kasir</title>
+      <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+      <div class="container">
+        <h2>Login</h2>
+        <form method="POST" action="/login">
+          <input type="text" name="username" placeholder="Username" required /><br/>
+          <input type="password" name="password" placeholder="Password" required /><br/>
+          <button type="submit">Login</button>
+        </form>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+// Jalankan server
+app.listen(port, () => {
+  console.log(`Server berjalan di http://localhost:${port}`);
 });
