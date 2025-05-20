@@ -1,64 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
+const db = require('../database/db'); // sesuaikan path sesuai struktur proyek
 
-const db = new sqlite3.Database('./database/kasir.db');
-
-// Middleware pake query token
-function isAuthenticated(req, res, next) {
-  if (req.query.token === 'rahasia123') {
-    next();
-  } else {
-    res.status(401).send('Unauthorized: token salah atau tidak ada');
-  }
-}
-
-router.use(isAuthenticated);
-
-// Tampil semua barang
+// GET all products - Ambil semua produk dari database
 router.get('/', (req, res) => {
-  db.all('SELECT * FROM barang', (err, rows) => {
-    if (err) return res.status(500).send(err.message);
+  const sql = 'SELECT * FROM products ORDER BY id';
+  db.all(sql, (err, rows) => {
+    if (err) {
+      console.error('Gagal ambil data produk:', err.message);
+      return res.status(500).json({ error: 'Gagal mengambil data produk' });
+    }
     res.json(rows);
   });
 });
 
-// Tambah barang baru (POST /products)
+// POST add new product - Tambah produk baru
 router.post('/', (req, res) => {
-  const { nama, harga, stok } = req.body;
-  db.run(
-    'INSERT INTO barang (nama, harga, stok) VALUES (?, ?, ?)',
-    [nama, harga, stok],
-    function (err) {
-      if (err) return res.status(500).send(err.message);
-      res.json({ id: this.lastID, nama, harga, stok });
-    }
-  );
-});
+  let { name, price, stock } = req.body;
 
-// Update stok barang (PATCH /products/:id)
-router.patch('/:id', (req, res) => {
-  const barangId = req.params.id;
-  const { stok } = req.body;
+  // Validasi input
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ error: 'Nama produk harus diisi dan berupa teks.' });
+  }
+  name = name.trim();
+  price = Number(price);
+  stock = Number(stock);
 
-  if (stok === undefined || stok < 0) {
-    return res.status(400).send('Stok harus diisi dan tidak boleh negatif');
+  if (name.length === 0 || isNaN(price) || isNaN(stock) || price < 0 || stock < 0) {
+    return res.status(400).json({ error: 'Data tidak lengkap atau harga dan stok harus angka >= 0.' });
   }
 
-  db.run(
-    'UPDATE barang SET stok = ? WHERE id = ?',
-    [stok, barangId],
-    function (err) {
-      if (err) {
-        console.error('Error saat update stok:', err.message);
-        return res.status(500).send('Gagal memperbarui stok: ' + err.message);
-      }
-      if (this.changes === 0) {
-        return res.status(404).send('Barang tidak ditemukan');
-      }
-      res.json({ id: barangId, stok });
+  const sql = `INSERT INTO products (name, price, stock) VALUES (?, ?, ?)`;
+  db.run(sql, [name, price, stock], function (err) {
+    if (err) {
+      console.error('Gagal menambah produk:', err.message);
+      return res.status(500).json({ error: 'Gagal menambah produk' });
     }
-  );
+    // Berikan respon ID produk baru
+    res.status(201).json({ id: this.lastID, message: 'Produk berhasil ditambahkan' });
+  });
 });
 
 module.exports = router;

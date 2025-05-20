@@ -1,7 +1,10 @@
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./webkasir.db');
+const path = require('path');
 
-// Buat tabel users, products, transactions, transaction_items kalau belum ada
+const dbPath = path.resolve(__dirname, 'kasir.db');
+const db = new sqlite3.Database(dbPath);
+
+// buat tabel jika belum ada
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

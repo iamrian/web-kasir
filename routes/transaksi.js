@@ -1,76 +1,86 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
+const db = require('../database/db');
 
-const db = new sqlite3.Database('./database/kasir.db');
+// Ambil semua transaksi (join untuk tampil detail)
+router.get('/', (req, res) => {
+  const query = `
+    SELECT 
+      ti.id AS id,
+      p.name AS nama,
+      ti.quantity AS qty,
+      (ti.quantity * ti.price) AS total_harga,
+      t.date AS tanggal
+    FROM transaction_items ti
+    JOIN transactions t ON ti.transaction_id = t.id
+    JOIN products p ON ti.product_id = p.id
+    ORDER BY t.date DESC
+  `;
 
-// Set busy timeout supaya SQLite mau menunggu kunci sampai 3 detik
-db.run('PRAGMA busy_timeout = 3000');
+  db.all(query, [], (err, rows) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('Gagal ambil data transaksi');
+    }
+    res.json(rows);
+  });
+});
 
-function isAuthenticated(req, res, next) {
-  if (!req.session.userId) return res.redirect('/login');
-  next();
-}
-
-router.use(isAuthenticated);
-
-// POST transaksi baru (jual barang)
+// Tambah transaksi baru
 router.post('/', (req, res) => {
-  const { barang_id, qty } = req.body;
+  const { product_id, quantity } = req.body;
+  const userId = req.session.userId || 1; // default user id 1 jika belum login
+  const date = new Date().toISOString();
 
-  if (!barang_id || !qty || qty <= 0) {
-    return res.status(400).send('Barang ID dan jumlah harus valid');
+  if (!product_id || !quantity || quantity <= 0) {
+    return res.status(400).send('Data tidak valid');
   }
 
-  // Mulai serialize supaya query dieksekusi berurutan
   db.serialize(() => {
-    db.get('SELECT * FROM barang WHERE id = ?', [barang_id], (err, barang) => {
-      if (err) return res.status(500).send('Kesalahan saat mengambil data barang');
-      if (!barang) return res.status(404).send('Barang tidak ditemukan');
-      if (barang.stok < qty) return res.status(400).send('Stok barang tidak cukup');
+    // Insert ke transactions
+    db.run('INSERT INTO transactions (user_id, date) VALUES (?, ?)', [userId, date], function (err) {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Gagal simpan transaksi');
+      }
 
-      const total_harga = barang.harga * qty;
-      const tanggal = new Date().toISOString();
+      const transactionId = this.lastID;
 
-      // Mulai transaksi SQL
-      db.run('BEGIN TRANSACTION');
-
-      // Insert transaksi
-      db.run(
-        'INSERT INTO transaksi (barang_id, qty, total_harga, tanggal) VALUES (?, ?, ?, ?)',
-        [barang_id, qty, total_harga, tanggal],
-        function (err) {
-          if (err) {
-            console.error('Error insert transaksi:', err);
-            db.run('ROLLBACK');
-            return res.status(500).send('Gagal menyimpan transaksi');
-          }
-
-          // Update stok barang
-          db.run(
-            'UPDATE barang SET stok = stok - ? WHERE id = ?',
-            [qty, barang_id],
-            (err) => {
-              if (err) {
-                console.error('Error update stok barang:', err);
-                db.run('ROLLBACK');
-                return res.status(500).send('Gagal memperbarui stok');
-              }
-
-              // Commit transaksi
-              db.run('COMMIT');
-
-              res.json({
-                id: this.lastID,
-                barang_id,
-                qty,
-                total_harga,
-                tanggal,
-              });
-            }
-          );
+      // Ambil harga dan stok produk
+      db.get('SELECT price, stock FROM products WHERE id = ?', [product_id], (err, product) => {
+        if (err || !product) {
+          return res.status(500).send('Gagal ambil data produk');
         }
-      );
+
+        if (product.stock < quantity) {
+          return res.status(400).send('Stok tidak cukup');
+        }
+
+        // Simpan item transaksi
+        db.run(
+          `INSERT INTO transaction_items (transaction_id, product_id, quantity, price) VALUES (?, ?, ?, ?)`,
+          [transactionId, product_id, quantity, product.price],
+          (err) => {
+            if (err) {
+              console.error(err);
+              return res.status(500).send('Gagal simpan item transaksi');
+            }
+
+            // Update stok produk
+            db.run(
+              'UPDATE products SET stock = stock - ? WHERE id = ?',
+              [quantity, product_id],
+              (err) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).send('Gagal update stok produk');
+                }
+                res.sendStatus(200);
+              }
+            );
+          }
+        );
+      });
     });
   });
 });

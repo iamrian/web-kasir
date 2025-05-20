@@ -94,7 +94,7 @@
         <input type="number" id="jumlah" class="form-control" placeholder="Jumlah" min="1" required />
       </div>
       <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100">Tambah</button>
+        <button type="submit" class="btn btn-primary w-100">Jual</button>
       </div>
       <div class="col-md-2">
         <button id="exportExcel" class="btn btn-success w-100" type="button">Export Excel</button>
@@ -131,15 +131,15 @@
 
     async function loadBarang() {
       try {
-        const res = await fetch('/products');
+        const res = await fetch('/barang');
         if (!res.ok) throw new Error('Gagal load barang');
         const data = await res.json();
         barangList = data;
         barangSelect.innerHTML = '<option value="">-- Pilih Barang --</option>';
         barangList.forEach(b => {
           barangSelect.innerHTML += `
-            <option value="${b.id}" data-harga="${b.harga}" data-stok="${b.stok}">
-              ${b.nama} - ${formatRupiah(b.harga)} (Stok: ${b.stok})
+            <option value="${b.id}" data-harga="${b.price}" data-stok="${b.stock}">
+              ${b.name} - ${formatRupiah(b.price)} (Stok: ${b.stock})
             </option>
           `;
         });
@@ -184,31 +184,30 @@
       e.preventDefault();
 
       const selected = barangSelect.options[barangSelect.selectedIndex];
-      const barang_id = selected.value;
+      const product_id = selected.value;
       const nama = selected.text.split(' - ')[0];
       const harga = parseInt(selected.getAttribute('data-harga'));
       const stok = parseInt(selected.getAttribute('data-stok'));
-      const qty = parseInt(document.getElementById('jumlah').value);
+      const quantity = parseInt(document.getElementById('jumlah').value);
 
-      if (!barang_id) {
+      if (!product_id) {
         alert('Pilih barang terlebih dahulu!');
         return;
       }
-      if (qty <= 0) {
+      if (quantity <= 0) {
         alert('Jumlah harus lebih dari 0');
         return;
       }
-      if (qty > stok) {
+      if (quantity > stok) {
         alert(`Stok tidak cukup! Stok tersedia: ${stok}`);
         return;
       }
 
-      // Kirim ke backend POST /transactions
       try {
         const res = await fetch('/transactions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barang_id, qty }),
+          body: JSON.stringify({ product_id, quantity }),
         });
         if (!res.ok) {
           const errMsg = await res.text();
@@ -216,7 +215,6 @@
         }
         alert('✅ Transaksi berhasil!');
 
-        // refresh data barang dan transaksi
         await loadBarang();
         await loadTransaksi();
 
@@ -231,7 +229,6 @@
         alert('Data transaksi kosong, tidak bisa diexport!');
         return;
       }
-      // Format data untuk excel
       const dataForExcel = transaksi.map(({ id, nama, qty, total_harga, tanggal }) => ({
         ID: id,
         'Nama Barang': nama,

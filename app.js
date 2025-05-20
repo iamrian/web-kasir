@@ -1,7 +1,9 @@
+const session = require('express-session');
+
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const authRouter = require('./routes/auth');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -13,7 +15,19 @@ app.use(session({
   secret: 'rahasia-kasir',
   resave: false,
   saveUninitialized: false,
+  cookie: {
+    secure: false,           // Harus false kalau di localhost tanpa HTTPS
+    maxAge: 1000 * 60 * 60 * 24,  // Session bertahan 1 hari
+  },
 }));
+
+// Middleware: proteksi rute jika belum login
+function requireLogin(req, res, next) {
+  if (!req.session.userId) {
+    return res.redirect('/login');
+  }
+  next();
+}
 
 // Import routes
 const authRouter = require('./routes/auth');
@@ -25,19 +39,17 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Routes untuk autentikasi
+// Dashboard hanya bisa diakses jika sudah login
+app.get('/dashboard', requireLogin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Gunakan routes dengan proteksi session
 app.use('/', authRouter);
+app.use('/products', requireLogin, barangRouter);
+app.use('/transactions', requireLogin, transaksiRouter);
 
-// ...
-app.use('/', authRouter);
-
-// Routes untuk data barang (products)
-app.use('/products', barangRouter);
-
-// Routes untuk transaksi
-app.use('/transactions', transaksiRouter);
-
-// 404 handler (optional)
+// 404 handler
 app.use((req, res) => {
   res.status(404).send('404 Not Found');
 });
